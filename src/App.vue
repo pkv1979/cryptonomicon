@@ -48,6 +48,10 @@
           <div
             v-for="item in tickers"
             :key="item.name"
+            @click="select(item)"
+            :class="{
+              'border-4': selectedTicker === item
+            }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -60,7 +64,7 @@
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button
-              @click="removeTicker(item)"
+              @click.stop="removeTicker(item)"
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
             >
               <svg
@@ -81,17 +85,23 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section class="relative">
+      <section v-if="selectedTicker" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          VUE - USD
+          {{ selectedTicker.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
-          <div class="bg-purple-800 border w-10 h-24"></div>
-          <div class="bg-purple-800 border w-10 h-32"></div>
-          <div class="bg-purple-800 border w-10 h-48"></div>
-          <div class="bg-purple-800 border w-10 h-16"></div>
+          <div
+            v-for="(bar, idx) in normalizeGraphics()"
+            :key="idx"
+            :style="{ height: `${bar}%` }"
+            class="bg-purple-800 border w-10"
+          ></div>
         </div>
-        <button type="button" class="absolute top-0 right-0">
+        <button
+          @click="selectedTicker = null"
+          type="button"
+          class="absolute top-0 right-0"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -125,7 +135,9 @@ export default {
   data() {
     return {
       ticker: "",
-      tickers: []
+      tickers: [],
+      selectedTicker: null,
+      graphicTicker: []
     };
   },
   methods: {
@@ -135,10 +147,39 @@ export default {
         price: "-"
       };
       this.tickers.push(newItem);
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?&fsym=${newItem.name}&tsyms=USD&api_key=cef8e2180e7f806d282e7f53890345c81441b8283b4d240232b29a63bab21964`
+        );
+        const data = await f.json();
+        this.tickers.find(t => t.name == newItem.name).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+        // newItem.price = data.USD;
+
+        if (this.selectedTicker?.name === newItem.name) {
+          this.graphicTicker.push(data.USD);
+        }
+      }, 5000);
       this.ticker = "";
     },
+
     removeTicker(item) {
       this.tickers = this.tickers.filter(i => i !== item);
+      this.selectedTicker = null;
+    },
+
+    normalizeGraphics() {
+      const maxValue = Math.max(...this.graphicTicker);
+      const minValue = Math.min(...this.graphicTicker);
+
+      return this.graphicTicker.map(
+        item => 5 + ((item - minValue) / (maxValue - minValue)) * 95
+      );
+    },
+
+    select(ticker) {
+      this.selectedTicker = ticker;
+      this.graphicTicker = [];
     }
   }
 };
