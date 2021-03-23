@@ -129,7 +129,7 @@
                 {{ item.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ item.price }}
+                {{ formatPrice(item.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -200,6 +200,8 @@
 </template>
 
 <script>
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
+
 export default {
   name: "App",
   data() {
@@ -233,9 +235,13 @@ export default {
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach(ticker => {
-        this.subscribeToUpdates(ticker.name);
+        subscribeToTicker(ticker.name, newPrice => {
+          this.updateTicker(ticker.name, newPrice);
+        });
       });
     }
+
+    setInterval(this.updateTickers, 5000);
 
     // const data = await fetch(
     //   "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
@@ -286,20 +292,28 @@ export default {
   },
 
   methods: {
-    subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?&fsym=${tickerName}&tsyms=USD&api_key=cef8e2180e7f806d282e7f53890345c81441b8283b4d240232b29a63bab21964`
-        );
-        const data = await f.json();
-        this.tickers.find(t => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        // newItem.price = data.USD;
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter(t => t.name === tickerName)
+        .forEach(t => (t.price = price));
+    },
 
-        if (this.selectedTicker?.name === tickerName) {
-          this.graphicTicker.push(data.USD);
-        }
-      }, 5000);
+    async updateTickers() {
+      // if (!this.tickers.length) {
+      //   return;
+      // }
+      // this.tickers.forEach(ticker => {
+      //   const price = exchangeData[ticker.name.toUpperCase()];
+      //   ticker.price = price ?? "-";
+      // });
+    },
+
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
     addTicker() {
@@ -308,10 +322,11 @@ export default {
         price: "-"
       };
       this.tickers = [...this.tickers, newItem];
-
-      this.subscribeToUpdates(newItem.name);
       this.ticker = "";
       this.filter = "";
+      subscribeToTicker(newItem.name, newPrice => {
+        this.updateTicker(newItem.name, newPrice);
+      });
     },
 
     removeTicker(item) {
@@ -319,6 +334,7 @@ export default {
       if (this.selectedTicker === item) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(item.name);
     },
 
     select(ticker) {
